@@ -180,38 +180,21 @@
       position: relative;
     }
 
-    /* 图片预览 */
+    /* 图片预览 - 原生方式 */
     .preview-image {
       max-width: 100%;
       max-height: 70vh;
       object-fit: contain;
-      cursor: pointer;
     }
 
-    /* 统一媒体预览 - iframe 容器 */
+    /* 统一媒体预览 - iframe 容器 (85% 屏幕宽高) */
     .iframe-preview-container {
       width: 100%;
+      height: 70vh;
       position: relative;
       border-radius: 8px;
       overflow: hidden;
       background: #000;
-    }
-
-    .iframe-preview-container.video {
-      aspect-ratio: 16 / 9;
-      max-height: 70vh;
-    }
-
-    .iframe-preview-container.audio {
-      height: 200px;
-      max-width: 500px;
-      margin: 0 auto;
-      background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
-    }
-
-    .iframe-preview-container.image {
-      min-height: 400px;
-      max-height: 70vh;
     }
 
     .iframe-preview-container iframe {
@@ -739,48 +722,42 @@
           </button>
         </div>
 
-        <!-- 图片预览 - 使用 iframe 预览服务 -->
-        <div v-if="previewType === 'image' && !loading" 
-             class="iframe-preview-container image"
-             @click="openImageInIframe">
-          <img :src="fileUrl" 
-               class="preview-image"
-               @load="onImageLoad"
-               @error="onLoadError">
-        </div>
+        <!-- 图片预览 - 保持原生方式 -->
+        <img v-if="previewType === 'image' && !loading" 
+             :src="fileUrl" 
+             class="preview-image"
+             @load="onImageLoad"
+             @error="onLoadError">
 
-        <!-- 视频预览 - 使用统一媒体预览服务 -->
-        <div v-else-if="previewType === 'video' && !loading" class="iframe-preview-container video">
+        <!-- 视频/音频/文档预览 - 使用统一媒体预览服务 iframe -->
+        <div v-else-if="(previewType === 'video' || previewType === 'audio') && !loading" 
+             class="iframe-preview-container">
           <iframe 
-            ref="videoIframe"
-            :src="videoPreviewUrl"
+            ref="mediaIframe"
+            :src="iframePreviewUrl"
             allow="autoplay; fullscreen; encrypted-media"
             allowfullscreen>
           </iframe>
         </div>
 
-        <!-- 音频预览 - 使用统一媒体预览服务 -->
-        <div v-else-if="previewType === 'audio' && !loading" class="iframe-preview-container audio">
+        <!-- PDF 预览 - 使用统一媒体预览服务 -->
+        <div v-else-if="previewType === 'pdf' && !loading" class="iframe-preview-container">
           <iframe 
-            ref="audioIframe"
-            :src="audioPreviewUrl"
+            ref="mediaIframe"
+            :src="iframePreviewUrl"
             allow="autoplay; fullscreen; encrypted-media"
             allowfullscreen>
           </iframe>
         </div>
 
-        <!-- PDF 预览 -->
-        <iframe v-else-if="previewType === 'pdf' && !loading" 
-                :src="fileUrl" 
-                class="preview-pdf">
-        </iframe>
-
-        <!-- Office 文档预览 -->
-        <div v-else-if="previewType === 'office' && !loading" class="preview-office-container">
-          <iframe :src="officeViewerUrl" class="preview-office" @load="loading = false"></iframe>
-          <p style="text-align: center; margin-top: 12px; color: #999; font-size: 0.85em;">
-            <i class="fas fa-info-circle"></i> 使用 Microsoft Office Online 预览，首次加载可能较慢
-          </p>
+        <!-- Office 文档预览 - 使用统一媒体预览服务 -->
+        <div v-else-if="previewType === 'office' && !loading" class="iframe-preview-container">
+          <iframe 
+            ref="mediaIframe"
+            :src="iframePreviewUrl"
+            allow="autoplay; fullscreen; encrypted-media"
+            allowfullscreen>
+          </iframe>
         </div>
 
         <!-- 文本预览 -->
@@ -866,34 +843,14 @@
           const fileUrlPath = this.fileUrl.startsWith('/') ? this.fileUrl : `/file/${this.fileUrl}`;
           return window.location.origin + fileUrlPath;
         },
-        // 视频预览 URL - 使用统一媒体预览服务
-        videoPreviewUrl() {
+        // 统一媒体预览 URL - 简化版，Blog 会自动识别文件类型
+        iframePreviewUrl() {
           const params = new URLSearchParams({
             url: this.fullFileUrl,
             title: this.fileName,
-            autoplay: '1',
-            proxy: '1'  // 启用代理以支持进度条拖动
+            autoplay: '1'
           });
-          return `${PREVIEW_SERVICE_BASE}/preview/video?${params.toString()}`;
-        },
-        // 音频预览 URL - 使用统一媒体预览服务
-        audioPreviewUrl() {
-          const params = new URLSearchParams({
-            url: this.fullFileUrl,
-            title: this.fileName,
-            artist: 'TelegramFile',
-            proxy: '1'  // 启用代理
-          });
-          return `${PREVIEW_SERVICE_BASE}/preview/audio?${params.toString()}`;
-        },
-        // 图片预览 URL - 使用统一媒体预览服务
-        imagePreviewUrl() {
-          const params = new URLSearchParams({
-            url: this.fullFileUrl,
-            title: this.fileName,
-            fit: 'contain'
-          });
-          return `${PREVIEW_SERVICE_BASE}/preview/image?${params.toString()}`;
+          return `${PREVIEW_SERVICE_BASE}/preview?${params.toString()}`;
         },
         officeViewerUrl() {
           // 使用 Microsoft Office Online Viewer
@@ -1028,20 +985,10 @@
           this.previewType = 'unsupported';
         },
 
-        // 打开图片预览 iframe（点击图片时打开全功能预览）
-        openImageInIframe() {
-          window.open(this.imagePreviewUrl, '_blank');
-        },
-
-        // 销毁 iframe（清理资源）
+        // 销毁 iframe（彻底移除以停止播放）
         destroyIframes() {
-          // 销毁视频 iframe
-          if (this.$refs.videoIframe) {
-            this.$refs.videoIframe.src = 'about:blank';
-          }
-          // 销毁音频 iframe
-          if (this.$refs.audioIframe) {
-            this.$refs.audioIframe.src = 'about:blank';
+          if (this.$refs.mediaIframe) {
+            this.$refs.mediaIframe.src = 'about:blank';
           }
         },
 

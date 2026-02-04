@@ -718,19 +718,19 @@
       background: rgba(138, 75, 255, 0.7);
     }
 
-    /* 图片预览弹窗 - 支持 iframe */
+    /* 图片预览弹窗 - 原生图片 / iframe */
     .preview-modal {
       position: fixed;
       top: 0;
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.95);
+      background: rgba(0, 0, 0, 0.9);
       display: flex;
       align-items: center;
       justify-content: center;
       z-index: 1000;
-      padding: 40px;
+      padding: 20px;
     }
 
     .preview-modal img {
@@ -739,31 +739,20 @@
       border-radius: 8px;
     }
 
+    /* iframe 容器 - 85% 屏幕宽高 */
     .preview-modal .iframe-container {
-      width: 90%;
-      max-width: 1200px;
+      width: 85vw;
+      height: 85vh;
       position: relative;
-    }
-
-    .preview-modal .iframe-container.video {
-      aspect-ratio: 16 / 9;
-      max-height: 80vh;
-    }
-
-    .preview-modal .iframe-container.audio {
-      height: 200px;
-      max-width: 500px;
-    }
-
-    .preview-modal .iframe-container.image {
-      height: 80vh;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #000;
     }
 
     .preview-modal .iframe-container iframe {
       width: 100%;
       height: 100%;
       border: none;
-      border-radius: 8px;
     }
 
     .preview-close {
@@ -1507,33 +1496,15 @@
       </div>
     </div>
 
-    <!-- 预览弹窗 - 使用统一媒体预览服务 -->
+    <!-- 预览弹窗 - 原生图片 / iframe 预览 -->
     <div class="preview-modal" v-if="previewData" @click="closePreview">
       <button class="preview-close" @click="closePreview">
         <i class="fas fa-times"></i>
       </button>
-      <!-- 图片直接预览 -->
-      <img v-if="previewData.type === 'simple-image'" :src="previewData.url" @click.stop>
-      <!-- 图片 iframe 预览 -->
-      <div v-else-if="previewData.type === 'image'" class="iframe-container image" @click.stop>
-        <iframe 
-          ref="previewIframe"
-          :src="previewData.iframeUrl"
-          allow="autoplay; fullscreen; encrypted-media"
-          allowfullscreen>
-        </iframe>
-      </div>
-      <!-- 视频预览 -->
-      <div v-else-if="previewData.type === 'video'" class="iframe-container video" @click.stop>
-        <iframe 
-          ref="previewIframe"
-          :src="previewData.iframeUrl"
-          allow="autoplay; fullscreen; encrypted-media"
-          allowfullscreen>
-        </iframe>
-      </div>
-      <!-- 音频预览 -->
-      <div v-else-if="previewData.type === 'audio'" class="iframe-container audio" @click.stop>
+      <!-- 原生图片预览 -->
+      <img v-if="previewData.type === 'native-image'" :src="previewData.url" @click.stop>
+      <!-- iframe 预览（视频/音频/文档） -->
+      <div v-else-if="previewData.type === 'iframe'" class="iframe-container" @click.stop>
         <iframe 
           ref="previewIframe"
           :src="previewData.iframeUrl"
@@ -1999,7 +1970,7 @@
         // 预览图片（简单模式 - 直接显示图片）
         previewImage(url) {
           this.previewData = {
-            type: 'simple-image',
+            type: 'native-image',
             url: url
           };
         },
@@ -2010,56 +1981,44 @@
           const fileUrl = file.url;
           const ext = fileName.split('.').pop().toLowerCase();
           
-          // 判断文件类型
-          const videoExts = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'];
-          const audioExts = ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma', 'opus'];
+          // 图片类型 - 保持原生预览
           const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'];
-          
-          let type = '';
-          let iframeUrl = '';
-          
-          if (videoExts.includes(ext)) {
-            type = 'video';
-            const params = new URLSearchParams({
+          if (imageExts.includes(ext)) {
+            this.previewData = {
+              type: 'native-image',
               url: fileUrl,
-              title: fileName,
-              autoplay: '1',
-              proxy: '1'
-            });
-            iframeUrl = `${PREVIEW_SERVICE_BASE}/preview/video?${params.toString()}`;
-          } else if (audioExts.includes(ext)) {
-            type = 'audio';
-            const params = new URLSearchParams({
-              url: fileUrl,
-              title: fileName,
-              artist: 'TelegramFile',
-              proxy: '1'
-            });
-            iframeUrl = `${PREVIEW_SERVICE_BASE}/preview/audio?${params.toString()}`;
-          } else if (imageExts.includes(ext)) {
-            type = 'image';
-            const params = new URLSearchParams({
-              url: fileUrl,
-              title: fileName,
-              fit: 'contain'
-            });
-            iframeUrl = `${PREVIEW_SERVICE_BASE}/preview/image?${params.toString()}`;
-          } else {
-            // 不支持的类型，跳转到预览页
-            window.open(`./preview.html?file=${encodeURIComponent(file.path)}`, '_blank');
+              fileName: fileName
+            };
             return;
           }
           
-          this.previewData = {
-            type: type,
-            iframeUrl: iframeUrl,
-            url: fileUrl,
-            fileName: fileName
-          };
+          // 视频/音频/文档类型 - 使用 Blog Preview iframe
+          const videoExts = ['mp4', 'webm', 'mkv', 'avi', 'mov', 'm3u8'];
+          const audioExts = ['mp3', 'wav', 'ogg', 'flac', 'm4a'];
+          const docExts = ['pdf', 'txt', 'doc', 'docx'];
+          
+          if (videoExts.includes(ext) || audioExts.includes(ext) || docExts.includes(ext)) {
+            const params = new URLSearchParams({
+              url: fileUrl,
+              title: fileName,
+              autoplay: '1'
+            });
+            this.previewData = {
+              type: 'iframe',
+              iframeUrl: `${PREVIEW_SERVICE_BASE}/preview?${params.toString()}`,
+              url: fileUrl,
+              fileName: fileName
+            };
+            return;
+          }
+          
+          // 其他类型 - 直接下载
+          this.downloadFile(file);
         },
 
-        // 关闭预览并销毁 iframe
+        // 关闭预览并彻底移除 iframe
         closePreview() {
+          // 彻底移除 iframe 元素，停止视频/音频播放
           if (this.$refs.previewIframe) {
             this.$refs.previewIframe.src = 'about:blank';
           }
