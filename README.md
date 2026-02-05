@@ -12,7 +12,6 @@
 ![GitHub forks](https://img.shields.io/github/forks/katelya77/Katelya-TGBed?style=flat-square)
 ![GitHub license](https://img.shields.io/github/license/katelya77/Katelya-TGBed?style=flat-square)
 
-[![Deploy to Cloudflare Pages](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/katelya77/Katelya-TGBed)
 
 </div>
 
