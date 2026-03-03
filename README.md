@@ -354,6 +354,7 @@ curl -X POST "http://127.0.0.1:8081/bot<YOUR_BOT_TOKEN>/setWebhook" \
 
 适合对接 alist/openlist、NAS、群晖、坚果云等支持 WebDAV 的存储服务。  
 你可以把 WebDAV 作为统一挂载入口，后台继续按目录管理文件，已生成的 `/file/...` 直链不受目录调整影响。
+其中 alist/openlist 建议直接填写其 WebDAV 挂载地址（例如 `https://example.com/dav`），不要填管理后台地址。
 
 **环境变量：**
 
@@ -363,6 +364,7 @@ curl -X POST "http://127.0.0.1:8081/bot<YOUR_BOT_TOKEN>/setWebhook" \
 | `WEBDAV_USERNAME` | WebDAV 用户名（Basic 认证） | `alice` |
 | `WEBDAV_PASSWORD` | WebDAV 密码（Basic 认证） | `your-password` |
 | `WEBDAV_BEARER_TOKEN` | Bearer Token（与用户名/密码二选一） | `eyJhbGciOi...` |
+| `WEBDAV_TOKEN` | Bearer Token 兼容变量名（可选） | `eyJhbGciOi...` |
 | `WEBDAV_ROOT_PATH` | 可选，WebDAV 根目录前缀 | `k-vault/uploads` |
 
 **部署步骤：**
@@ -553,6 +555,7 @@ curl -X POST "http://127.0.0.1:8081/bot<YOUR_BOT_TOKEN>/setWebhook" \
 | `WEBDAV_USERNAME` | WebDAV 用户名（Basic 认证） | 可选 |
 | `WEBDAV_PASSWORD` | WebDAV 密码（Basic 认证） | 可选 |
 | `WEBDAV_BEARER_TOKEN` | WebDAV Bearer Token（与用户名/密码二选一） | 可选 |
+| `WEBDAV_TOKEN` | WebDAV Bearer Token 兼容变量名 | 可选 |
 | `WEBDAV_ROOT_PATH` | WebDAV 根目录前缀 | 可选 |
 | `GITHUB_TOKEN` | GitHub Token（仓库写权限） | 可选 |
 | `GITHUB_REPO` | GitHub 仓库（`owner/repo`） | 可选 |

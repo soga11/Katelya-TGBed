@@ -41,6 +41,12 @@ function encodeSegments(segments) {
   return segments.map((segment) => encodeURIComponent(segment)).join('/');
 }
 
+function getRootUrlCandidates(config) {
+  const base = config.baseUrl || '';
+  if (!base) return [];
+  return Array.from(new Set([base, `${base}/`]));
+}
+
 function authMode(config) {
   if (config.bearerToken) return 'bearer';
   if (config.username && config.password) return 'basic';
@@ -109,17 +115,31 @@ async function ensureCollectionPath(config, storagePath) {
 
   for (let index = 0; index < directorySegments.length; index += 1) {
     const partial = directorySegments.slice(0, index + 1);
-    const response = await fetch(`${config.baseUrl}/${encodeSegments(partial)}`, {
-      method: 'MKCOL',
-      headers: buildAuthHeaders(config),
-    });
+    const encoded = encodeSegments(partial);
+    const candidates = Array.from(new Set([
+      `${config.baseUrl}/${encoded}`,
+      `${config.baseUrl}/${encoded}/`,
+    ]));
 
-    if ([200, 201, 204, 301, 302, 405].includes(response.status)) {
-      continue;
+    let success = false;
+    let lastResponse = null;
+    for (const url of candidates) {
+      const response = await fetch(url, {
+        method: 'MKCOL',
+        headers: buildAuthHeaders(config),
+      });
+      if ([200, 201, 204, 301, 302, 405].includes(response.status)) {
+        success = true;
+        break;
+      }
+      lastResponse = response;
     }
 
-    const detail = await decodeErrorTextSafe(response);
-    throw new Error(`WebDAV MKCOL failed (${response.status}): ${detail || 'Unknown error'}`);
+    if (!success) {
+      const detail = lastResponse ? await decodeErrorTextSafe(lastResponse) : '';
+      const statusCode = lastResponse ? lastResponse.status : 'N/A';
+      throw new Error(`WebDAV MKCOL failed (${statusCode}): ${detail || 'Unknown error'}`);
+    }
   }
 }
 
@@ -199,19 +219,7 @@ export async function checkWebDAVConnection(env = {}) {
 
   const config = getWebDAVConfig(env);
   try {
-    const optionsResponse = await fetchDav(config, 'OPTIONS', '', {
-      headers: { Depth: '0' },
-    });
-
-    if (optionsResponse.ok) {
-      return {
-        connected: true,
-        configured: true,
-        status: optionsResponse.status,
-        message: 'Connected',
-      };
-    }
-
+    const rootCandidates = getRootUrlCandidates(config);
     const propfindBody = [
       '<?xml version="1.0" encoding="utf-8" ?>',
       '<d:propfind xmlns:d="DAV:">',
@@ -219,22 +227,76 @@ export async function checkWebDAVConnection(env = {}) {
       '</d:propfind>',
     ].join('');
 
-    const propfindResponse = await fetchDav(config, 'PROPFIND', '', {
-      headers: {
-        Depth: '0',
-        'Content-Type': 'application/xml; charset=utf-8',
-      },
-      body: propfindBody,
-    });
+    let lastDetail = '';
+    let lastStatus = null;
 
-    const connected = propfindResponse.ok || propfindResponse.status === 207;
-    const detail = connected ? '' : await decodeErrorTextSafe(propfindResponse);
+    for (const rootUrl of rootCandidates) {
+      const authHeaders = buildAuthHeaders(config, { Depth: '0' });
+      const optionsResponse = await fetch(rootUrl, {
+        method: 'OPTIONS',
+        headers: authHeaders,
+      });
+
+      if (optionsResponse.ok) {
+        return {
+          connected: true,
+          configured: true,
+          status: optionsResponse.status,
+          message: 'Connected',
+        };
+      }
+
+      if ([401, 403].includes(optionsResponse.status)) {
+        const detail = await decodeErrorTextSafe(optionsResponse);
+        return {
+          connected: false,
+          configured: true,
+          status: optionsResponse.status,
+          message: 'Authentication failed',
+          detail: detail || 'Authentication failed',
+        };
+      }
+
+      const propfindResponse = await fetch(rootUrl, {
+        method: 'PROPFIND',
+        headers: buildAuthHeaders(config, {
+          Depth: '0',
+          'Content-Type': 'application/xml; charset=utf-8',
+        }),
+        body: propfindBody,
+      });
+
+      const connected = propfindResponse.ok || propfindResponse.status === 207;
+      if (connected) {
+        return {
+          connected: true,
+          configured: true,
+          status: propfindResponse.status,
+          message: 'Connected',
+        };
+      }
+
+      if ([401, 403].includes(propfindResponse.status)) {
+        const detail = await decodeErrorTextSafe(propfindResponse);
+        return {
+          connected: false,
+          configured: true,
+          status: propfindResponse.status,
+          message: 'Authentication failed',
+          detail: detail || 'Authentication failed',
+        };
+      }
+
+      lastStatus = propfindResponse.status;
+      lastDetail = await decodeErrorTextSafe(propfindResponse);
+    }
+
     return {
-      connected,
+      connected: false,
       configured: true,
-      status: propfindResponse.status,
-      message: connected ? 'Connected' : (detail || 'Connection failed'),
-      detail: detail || undefined,
+      status: lastStatus || undefined,
+      message: lastDetail || 'Connection failed',
+      detail: lastDetail || undefined,
     };
   } catch (error) {
     return {

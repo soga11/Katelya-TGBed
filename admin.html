@@ -994,9 +994,9 @@
           // 存储类型匹配
           const storagePrefix = this.getStorageType(data.name);
           const matchesStorage = this.storageFilter === 'all' || this.storageFilter === storagePrefix;
-          const currentFolder = this.normalizeFolderPath(this.folderPath);
-          const fileFolder = this.normalizeFolderPath(data.metadata?.folderPath || '');
-          const matchesFolder = currentFolder === fileFolder;
+          // 目录筛选由后端 list 接口按 folderPath 负责，前端此处不再重复过滤，
+          // 避免“全部文件”分页出现空白页。
+          const matchesFolder = true;
 
           return matchesSearch && matchesFilter && matchesType && matchesStorage && matchesFolder;
         });
@@ -1005,13 +1005,7 @@
         return this.sortData(this.filteredTableData)
           .slice((this.currentPage - 1) * this.pageSize, this.currentPage * this.pageSize);
       },
-      useServerTotalForPagination() {
-        return !this.search && this.filterOption === 'all' && this.fileType === 'all';
-      },
       paginationTotal() {
-        if (this.useServerTotalForPagination) {
-          return Math.max(Number(this.totalCount || 0), this.filteredTableData.length);
-        }
         return this.filteredTableData.length;
       },
       paginatedData() {
@@ -1126,6 +1120,9 @@
       filterOption(newOption) {
         localStorage.setItem('filterOption', newOption);
         this.currentPage = 1;
+        this.normalizeCurrentPage();
+      },
+      paginationTotal() {
         this.normalizeCurrentPage();
       },
       viewMode(newValue) { localStorage.setItem('adminViewMode', newValue); },
@@ -2012,20 +2009,10 @@
           this.$message.error('退出失败，请重试');
         }
       },
-      async handlePageChange(page) {
+      handlePageChange(page) {
         this.currentPage = page;
-        await this.ensurePageDataForPage(page);
         this.normalizeCurrentPage();
       },  // 切换页面
-      async ensurePageDataForPage(page) {
-        if (!this.useServerTotalForPagination) return;
-        const needCount = page * this.pageSize;
-        let guard = 0;
-        while (this.filteredTableData.length < needCount && this.nextCursor && guard < 10) {
-          await this.loadMore({ silent: true, auto: true });
-          guard += 1;
-        }
-      },
       normalizeListItem(file) {
         return {
           ...file,

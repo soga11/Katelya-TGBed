@@ -106,7 +106,7 @@ function loadConfig(env = process.env) {
         baseUrl: env.WEBDAV_BASE_URL || '',
         username: env.WEBDAV_USERNAME || '',
         password: env.WEBDAV_PASSWORD || '',
-        bearerToken: env.WEBDAV_BEARER_TOKEN || '',
+        bearerToken: env.WEBDAV_BEARER_TOKEN || env.WEBDAV_TOKEN || '',
         rootPath: env.WEBDAV_ROOT_PATH || '',
       },
       github: {
